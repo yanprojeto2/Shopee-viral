@@ -6,7 +6,7 @@ export default function Header() {
     <header className="sticky top-0 z-40 bg-shopee shadow-md">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-white font-extrabold text-xl">
-          <span>Shopee Viral</span>
+          <span>Do zero ao salário mínimo com a Shopee</span>
         </Link>
 
         <nav className="flex items-center gap-2">
