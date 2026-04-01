@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Upload, Image as ImageIcon, Video, Trash2, Download } from 'lucide-react'
 import type { Media } from '@/types/database'
 import { formatFileSize, formatDownloads } from '@/lib/utils'
+import { captureVideoFrame } from '@/lib/captureVideoFrame'
 
 interface MediaUploadProps {
   productId: string
@@ -45,7 +46,23 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
 
     const { url } = await uploadRes.json()
 
-    // 2. Register media record in DB
+    // 2. Capture thumbnail for videos
+    let thumbnail_url: string | null = null
+    if (type === 'video') {
+      const thumbBlob = await captureVideoFrame(file)
+      if (thumbBlob) {
+        const thumbForm = new FormData()
+        thumbForm.append('file', new File([thumbBlob], 'thumb.jpg', { type: 'image/jpeg' }))
+        thumbForm.append('folder', 'product-thumbnails')
+        const thumbRes = await fetch('/api/admin/upload', { method: 'POST', body: thumbForm })
+        if (thumbRes.ok) {
+          const { url: tUrl } = await thumbRes.json()
+          thumbnail_url = tUrl
+        }
+      }
+    }
+
+    // 3. Register media record in DB
     const mediaRes = await fetch('/api/admin/media', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,6 +70,7 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
         product_id: productId,
         type,
         url,
+        thumbnail_url,
         file_size: formatFileSize(file.size),
       }),
     })

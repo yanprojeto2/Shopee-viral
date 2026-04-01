@@ -16,6 +16,7 @@ import { CATEGORIES } from '@/types/database'
 import { Save, ArrowLeft, Upload, X, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatFileSize } from '@/lib/utils'
+import { captureVideoFrame } from '@/lib/captureVideoFrame'
 
 interface ProductFormProps {
   product?: Product
@@ -108,6 +109,22 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
 
       if (uploadRes.ok) {
         const { url: mediaUrl } = await uploadRes.json()
+
+        let thumbnail_url: string | null = null
+        if (isVideo) {
+          const thumbBlob = await captureVideoFrame(mediaFile)
+          if (thumbBlob) {
+            const thumbForm = new FormData()
+            thumbForm.append('file', new File([thumbBlob], 'thumb.jpg', { type: 'image/jpeg' }))
+            thumbForm.append('folder', 'product-thumbnails')
+            const thumbRes = await fetch('/api/admin/upload', { method: 'POST', body: thumbForm })
+            if (thumbRes.ok) {
+              const { url: tUrl } = await thumbRes.json()
+              thumbnail_url = tUrl
+            }
+          }
+        }
+
         await fetch('/api/admin/media', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -115,6 +132,7 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
             product_id: savedProduct.id,
             type: isVideo ? 'video' : 'photo',
             url: mediaUrl,
+            thumbnail_url,
             file_size: formatFileSize(mediaFile.size),
           }),
         })
