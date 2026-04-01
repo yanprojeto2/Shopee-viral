@@ -214,7 +214,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                       onClick={() => setEditorProduct(product)}
                     >
                       <Type className="h-3.5 w-3.5" />
-                      Editor de texto
+                      Editar
                     </Button>
                   </div>
                 </div>
