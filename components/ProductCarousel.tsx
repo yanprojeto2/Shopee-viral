@@ -123,7 +123,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                         muted
                         loop
                         playsInline
-                        preload="metadata"
+                        preload="none"
                         className="w-full h-full object-cover"
                         onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 1 }}
                       />

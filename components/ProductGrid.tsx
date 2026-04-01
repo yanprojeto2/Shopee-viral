@@ -97,6 +97,7 @@ export default function ProductGrid({ products, loading }: ProductGridProps) {
                           src={firstPhoto.url.startsWith('/') ? firstPhoto.url : `/api/media/stream/${firstPhoto.id}`}
                           alt={product.name}
                           fill
+                          loading="lazy"
                           className="object-cover"
                           sizes="(max-width: 768px) 50vw, 25vw"
                         />
