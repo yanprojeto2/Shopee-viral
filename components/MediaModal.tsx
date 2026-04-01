@@ -90,7 +90,7 @@ export default function MediaModal({ product, open, onClose }: MediaModalProps) 
                   >
                     <div className="relative aspect-square">
                       <Image
-                        src={photo.url}
+                        src={photo.url.startsWith('/') ? photo.url : `/api/media/stream/${photo.id}`}
                         alt="Foto do produto"
                         fill
                         className="object-cover"

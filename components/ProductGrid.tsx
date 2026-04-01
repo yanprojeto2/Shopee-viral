@@ -94,7 +94,7 @@ export default function ProductGrid({ products, loading }: ProductGridProps) {
                     <div className="relative h-36 sm:h-44 bg-gray-100">
                       {firstPhoto ? (
                         <Image
-                          src={firstPhoto.url}
+                          src={firstPhoto.url.startsWith('/') ? firstPhoto.url : `/api/media/stream/${firstPhoto.id}`}
                           alt={product.name}
                           fill
                           className="object-cover"

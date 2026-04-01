@@ -142,7 +142,7 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mt-4">
             {photos.map((photo) => (
               <div key={photo.id} className="relative group rounded-lg overflow-hidden border border-shopee-border aspect-square bg-gray-100">
-                <Image src={photo.url} alt="Foto" fill className="object-cover" sizes="120px" />
+                <Image src={photo.url.startsWith('/') ? photo.url : `/api/media/stream/${photo.id}`} alt="Foto" fill className="object-cover" sizes="120px" />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <button onClick={() => handleDelete(photo)} className="p-1.5 bg-red-500 text-white rounded-md hover:bg-red-600">
                     <Trash2 className="h-3.5 w-3.5" />
