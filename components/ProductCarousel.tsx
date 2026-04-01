@@ -124,6 +124,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                         playsInline
                         preload="metadata"
                         className="w-full h-full object-cover"
+                        onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 1 }}
                       />
                       {/* Play icon overlay quando não está em hover */}
                       {!isHovered && (
