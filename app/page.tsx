@@ -45,11 +45,8 @@ export default async function HomePage() {
       <div className="bg-gradient-to-r from-shopee to-shopee-dark text-white py-8 sm:py-10 px-4">
         <div className="container mx-auto text-center">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-2 sm:mb-3">
-            Shopee Viral Studio
+            Do zero ao salário mínimo com a Shopee
           </h1>
-          <p className="text-white/90 text-base sm:text-lg max-w-xl mx-auto font-semibold">
-            Baixe fotos e vídeos dos produtos mais virais e aumente suas comissões de afiliado!
-          </p>
         </div>
       </div>
 
