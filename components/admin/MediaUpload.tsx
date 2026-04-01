@@ -166,7 +166,7 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
             {videos.map((video) => (
               <div key={video.id} className="bg-gray-50 rounded-lg border border-shopee-border overflow-hidden">
                 <video
-                  src={video.url}
+                  src={video.url.startsWith('/') ? video.url : `/api/media/stream/${video.id}`}
                   controls
                   className="w-full max-h-64 bg-black"
                   preload="metadata"
