@@ -118,7 +118,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                     <>
                       <video
                         ref={(el) => { videoRefs.current[product.id] = el }}
-                        src={firstVideo.url.startsWith('/') ? firstVideo.url : `/api/media/stream/${firstVideo.id}`}
+                        src={firstVideo.url.startsWith('/') ? firstVideo.url : firstVideo.url}
                         muted
                         loop
                         playsInline
