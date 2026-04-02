@@ -111,12 +111,12 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
             return (
               <div
                 key={product.id}
-                className="flex-none w-52 sm:w-64 md:w-72 snap-start bg-white rounded-xl border border-shopee-border shadow-sm overflow-hidden"
+                className="flex-none w-64 sm:w-64 md:w-72 snap-start bg-white rounded-xl border border-shopee-border shadow-sm overflow-hidden"
                 onMouseEnter={() => handleMouseEnter(product.id)}
                 onMouseLeave={() => handleMouseLeave(product.id)}
               >
                 {/* Video */}
-                <div className="relative h-40 sm:h-48 md:h-52 bg-gray-900">
+                <div className="relative h-52 sm:h-48 md:h-52 bg-gray-900">
                   {firstVideo ? (
                     <>
                       <video
