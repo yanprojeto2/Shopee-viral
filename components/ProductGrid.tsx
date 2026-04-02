@@ -32,7 +32,7 @@ export default function ProductGrid({ products, loading }: ProductGridProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl border border-shopee-border overflow-hidden">
-                <Skeleton className="h-44 w-full" />
+                <Skeleton className="h-48 sm:h-44 w-full" />
                 <div className="p-3 space-y-2">
                   <Skeleton className="h-3 w-16" />
                   <Skeleton className="h-4 w-full" />
@@ -91,7 +91,7 @@ export default function ProductGrid({ products, loading }: ProductGridProps) {
                     className="bg-white rounded-xl border border-shopee-border shadow-sm overflow-hidden hover:shadow-md hover:border-shopee transition-all"
                   >
                     {/* Thumbnail */}
-                    <div className="relative h-36 sm:h-44 bg-gray-100">
+                    <div className="relative h-48 sm:h-44 bg-gray-100">
                       {firstPhoto ? (
                         <Image
                           src={firstPhoto.url.startsWith('/') ? firstPhoto.url : `/api/media/stream/${firstPhoto.id}`}
