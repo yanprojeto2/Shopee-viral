@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Pencil, Image as ImageIcon, Trash2, Plus } from 'lucide-react'
+import { Image as ImageIcon, Trash2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -158,8 +158,8 @@ export default function ProductsTableClient({ products }: { products: Product[] 
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
-                    <Button size="icon" variant="ghost" asChild className="h-8 w-8">
-                      <Link href={`/admin/products/${product.id}/edit`}><Pencil className="h-3.5 w-3.5" /></Link>
+                    <Button size="sm" variant="ghost" disabled className="h-8 cursor-not-allowed opacity-60 text-xs">
+                      Editar (em breve)
                     </Button>
                     <Button size="icon" variant="ghost" asChild className="h-8 w-8">
                       <Link href={`/admin/products/${product.id}/media`}><ImageIcon className="h-3.5 w-3.5" /></Link>
