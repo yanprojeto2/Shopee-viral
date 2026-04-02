@@ -105,6 +105,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
         >
           {products.map((product) => {
             const firstVideo = product.media.find((m) => m.type === 'video')
+            const firstPhoto = product.media.find((m) => m.type === 'photo')
             const totalDownloads = product.media.reduce((s, m) => s + m.downloads, 0)
             const isHovered = hoveredId === product.id
 
@@ -122,7 +123,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                       <video
                         ref={(el) => { videoRefs.current[product.id] = el }}
                         src={firstVideo.url.startsWith('/') ? firstVideo.url : `/api/media/stream/${firstVideo.id}`}
-                        poster={firstVideo.thumbnail_url ?? undefined}
+                        poster={firstVideo.thumbnail_url ?? firstPhoto?.url ?? undefined}
                         muted
                         loop
                         playsInline
