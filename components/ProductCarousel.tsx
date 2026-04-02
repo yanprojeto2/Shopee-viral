@@ -1,13 +1,12 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Download, Video, TrendingUp, Play, ExternalLink, Type } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Video, TrendingUp, Play, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import type { ProductWithMedia } from '@/types/database'
 import { getRankBadgeColor, formatDownloads } from '@/lib/utils'
-import TextEditorModal from '@/components/TextEditorModal'
 
 interface ProductCarouselProps {
   products: ProductWithMedia[]
@@ -17,7 +16,6 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isDownloading, setIsDownloading] = useState<string | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [editorProduct, setEditorProduct] = useState<ProductWithMedia | null>(null)
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({})
   const { toast } = useToast()
 
@@ -211,11 +209,10 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full text-xs min-h-[44px] border-gray-200 text-gray-600 hover:border-shopee hover:text-shopee"
-                      onClick={() => setEditorProduct(product)}
+                      disabled
+                      className="w-full text-xs min-h-[44px] cursor-not-allowed opacity-60"
                     >
-                      <Type className="h-3.5 w-3.5" />
-                      Editar
+                      Editar (em breve)
                     </Button>
                   </div>
                 </div>
@@ -231,11 +228,6 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
       </div>
     </section>
 
-    <TextEditorModal
-      open={!!editorProduct}
-      onClose={() => setEditorProduct(null)}
-      posterUrl={editorProduct?.media.find((m) => m.type === 'video')?.thumbnail_url ?? null}
-    />
   </>
   )
 }
