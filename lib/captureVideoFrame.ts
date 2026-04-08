@@ -11,31 +11,47 @@ export function captureVideoFrame(file: File): Promise<Blob | null> {
 
     const objectUrl = URL.createObjectURL(file)
     video.src = objectUrl
+    let resolved = false
 
     const cleanup = () => URL.revokeObjectURL(objectUrl)
 
-    video.addEventListener('loadeddata', () => {
-      video.currentTime = Math.min(1, video.duration * 0.1 || 0)
-    })
-
-    video.addEventListener('seeked', () => {
+    const capture = () => {
+      if (resolved) return
+      resolved = true
       try {
         const canvas = document.createElement('canvas')
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        canvas.width  = video.videoWidth  || 320
+        canvas.height = video.videoHeight || 568
         const ctx = canvas.getContext('2d')
         if (!ctx) { cleanup(); resolve(null); return }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        canvas.toBlob((blob) => { cleanup(); resolve(blob) }, 'image/jpeg', 0.8)
+        canvas.toBlob((blob) => { cleanup(); resolve(blob) }, 'image/jpeg', 0.85)
       } catch {
         cleanup()
         resolve(null)
       }
+    }
+
+    // Ao ter dados: tenta avançar para 1s (ou 10% se menor) para evitar frame preto
+    video.addEventListener('loadeddata', () => {
+      const dur = isFinite(video.duration) && video.duration > 0 ? video.duration : null
+      const seekTo = dur ? Math.min(1, dur * 0.1) : 1
+      // Se já está na posição certa, captura direto
+      if (Math.abs(video.currentTime - seekTo) < 0.01) {
+        capture()
+      } else {
+        video.currentTime = seekTo
+      }
     })
 
-    video.addEventListener('error', () => { cleanup(); resolve(null) })
+    video.addEventListener('seeked', capture)
+    video.addEventListener('error',  () => { cleanup(); resolve(null) })
 
-    // Timeout fallback
-    setTimeout(() => { cleanup(); resolve(null) }, 10000)
+    // Timeout de segurança
+    setTimeout(() => {
+      if (!resolved) { resolved = true; cleanup(); resolve(null) }
+    }, 8000)
+
+    video.load()
   })
 }

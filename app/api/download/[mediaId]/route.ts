@@ -2,6 +2,16 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
 import { slugify } from '@/lib/utils'
 
+export const maxDuration = 60
+
+function getExtAndMime(url: string, type: string): { ext: string; mime: string } {
+  if (type !== 'video') return { ext: 'jpg', mime: 'image/jpeg' }
+  const lower = url.toLowerCase()
+  if (lower.includes('.webm')) return { ext: 'webm', mime: 'video/webm' }
+  if (lower.includes('.mov')) return { ext: 'mp4', mime: 'video/mp4' } // re-label MOV as mp4 for compatibility
+  return { ext: 'mp4', mime: 'video/mp4' }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { mediaId: string } }
@@ -21,34 +31,28 @@ export async function GET(
   sql`UPDATE media SET downloads = downloads + 1 WHERE id = ${params.mediaId}`.then(() => {})
   sql`INSERT INTO downloads (media_id, user_agent) VALUES (${params.mediaId}, ${request.headers.get('user-agent') || ''})`.then(() => {})
 
-  const ext = media.type === 'video' ? 'mp4' : 'jpg'
+  const { ext, mime } = getExtAndMime(media.url, media.type)
   const filename = `${slugify(media.product_name)}.${ext}`
 
-  try {
-    let buffer: ArrayBuffer
-    if (media.url.startsWith('/')) {
+  // Local file (dev)
+  if (media.url.startsWith('/')) {
+    try {
       const { readFile } = await import('fs/promises')
       const { join } = await import('path')
-      const filePath = join(process.cwd(), 'public', media.url)
-      const bytes = await readFile(filePath)
-      buffer = bytes.buffer
-    } else {
-      const fileResponse = await fetch(media.url, {
-        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN!}` },
+      const bytes = await readFile(join(process.cwd(), 'public', media.url))
+      return new NextResponse(bytes, {
+        headers: {
+          'Content-Type': mime,
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Content-Length': bytes.byteLength.toString(),
+        },
       })
-      if (!fileResponse.ok) throw new Error('Falha ao buscar arquivo')
-      buffer = await fileResponse.arrayBuffer()
+    } catch {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
-
-    return new NextResponse(buffer, {
-      headers: {
-        'Content-Type': media.type === 'video' ? 'video/mp4' : 'image/jpeg',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': buffer.byteLength.toString(),
-        'Cache-Control': 'no-cache',
-      },
-    })
-  } catch {
-    return NextResponse.redirect(media.url)
   }
+
+  // Public URL (R2 or Vercel Blob public) — fetch without auth
+  // R2 public URL — redirect directly (avoids Vercel timeout/buffering)
+  return NextResponse.redirect(media.url, { status: 302 })
 }

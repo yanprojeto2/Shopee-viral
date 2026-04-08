@@ -17,6 +17,7 @@ import { Save, ArrowLeft, Upload, X, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatFileSize } from '@/lib/utils'
 import { captureVideoFrame } from '@/lib/captureVideoFrame'
+import { uploadToR2 } from '@/lib/uploadToR2'
 
 interface ProductFormProps {
   product?: Product
@@ -88,7 +89,8 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
     })
 
     if (!res.ok) {
-      toast({ title: 'Erro ao salvar produto', variant: 'destructive' })
+      const errBody = await res.json().catch(() => ({}))
+      toast({ title: 'Erro ao salvar produto', description: errBody.detail || errBody.error || `HTTP ${res.status}`, variant: 'destructive' })
       setSaving(false)
       return
     }
@@ -100,27 +102,18 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
       setUploadProgress(20)
 
       const isVideo = form.is_top10
-      const formData = new FormData()
-      formData.append('file', mediaFile)
-      formData.append('folder', isVideo ? 'product-videos' : 'product-photos')
-
-      const uploadRes = await fetch('/api/admin/upload', { method: 'POST', body: formData })
-      setUploadProgress(70)
-
-      if (uploadRes.ok) {
-        const { url: mediaUrl } = await uploadRes.json()
+      try {
+        const mediaUrl = await uploadToR2(mediaFile, isVideo ? 'product-videos' : 'product-photos')
+        setUploadProgress(70)
 
         let thumbnail_url: string | null = null
         if (isVideo) {
           const thumbBlob = await captureVideoFrame(mediaFile)
           if (thumbBlob) {
-            const thumbForm = new FormData()
-            thumbForm.append('file', new File([thumbBlob], 'thumb.jpg', { type: 'image/jpeg' }))
-            thumbForm.append('folder', 'product-thumbnails')
-            const thumbRes = await fetch('/api/admin/upload', { method: 'POST', body: thumbForm })
-            if (thumbRes.ok) {
-              const { url: tUrl } = await thumbRes.json()
-              thumbnail_url = tUrl
+            try {
+              thumbnail_url = await uploadToR2(new File([thumbBlob], 'thumb.jpg', { type: 'image/jpeg' }), 'product-thumbnails')
+            } catch {
+              // thumbnail falhou, continua sem ela
             }
           }
         }
@@ -137,6 +130,8 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
           }),
         })
         setUploadProgress(100)
+      } catch (err) {
+        toast({ title: 'Erro no upload: ' + (err instanceof Error ? err.message : String(err)), variant: 'destructive' })
       }
     }
 
@@ -171,17 +166,17 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
               clearMedia()
             }}
           />
-          <Label htmlFor="is_top10" className="cursor-pointer font-semibold">🔥 É Top 10?</Label>
+          <Label htmlFor="is_top10" className="cursor-pointer font-semibold">🔥 É Top 20?</Label>
         </div>
 
         {form.is_top10 && (
           <div className="space-y-1.5">
-            <Label htmlFor="rank">Posição no ranking (1-10)</Label>
+            <Label htmlFor="rank">Posição no ranking (1-20)</Label>
             <Input
               id="rank"
               type="number"
               min={1}
-              max={10}
+              max={20}
               value={form.rank}
               onChange={(e) => setForm({ ...form, rank: e.target.value })}
               placeholder="1"

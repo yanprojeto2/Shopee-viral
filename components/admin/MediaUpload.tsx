@@ -10,6 +10,7 @@ import { Upload, Image as ImageIcon, Video, Trash2, Download } from 'lucide-reac
 import type { Media } from '@/types/database'
 import { formatFileSize, formatDownloads } from '@/lib/utils'
 import { captureVideoFrame } from '@/lib/captureVideoFrame'
+import { uploadToR2 } from '@/lib/uploadToR2'
 
 interface MediaUploadProps {
   productId: string
@@ -30,34 +31,25 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
     setUploading(true)
     setProgress(20)
 
-    // 1. Upload file to Vercel Blob via our API
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('folder', type === 'photo' ? 'product-photos' : 'product-videos')
-
-    const uploadRes = await fetch('/api/admin/upload', { method: 'POST', body: formData })
-    setProgress(70)
-
-    if (!uploadRes.ok) {
-      toast({ title: 'Erro no upload', variant: 'destructive' })
+    let url: string
+    try {
+      url = await uploadToR2(file, type === 'photo' ? 'product-photos' : 'product-videos')
+    } catch (err) {
+      toast({ title: 'Erro no upload: ' + (err instanceof Error ? err.message : String(err)), variant: 'destructive' })
       setUploading(false)
       return
     }
-
-    const { url } = await uploadRes.json()
+    setProgress(70)
 
     // 2. Capture thumbnail for videos
     let thumbnail_url: string | null = null
     if (type === 'video') {
       const thumbBlob = await captureVideoFrame(file)
       if (thumbBlob) {
-        const thumbForm = new FormData()
-        thumbForm.append('file', new File([thumbBlob], 'thumb.jpg', { type: 'image/jpeg' }))
-        thumbForm.append('folder', 'product-thumbnails')
-        const thumbRes = await fetch('/api/admin/upload', { method: 'POST', body: thumbForm })
-        if (thumbRes.ok) {
-          const { url: tUrl } = await thumbRes.json()
-          thumbnail_url = tUrl
+        try {
+          thumbnail_url = await uploadToR2(new File([thumbBlob], 'thumb.jpg', { type: 'image/jpeg' }), 'product-thumbnails')
+        } catch {
+          // thumbnail falhou, continua sem ela
         }
       }
     }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings } from 'lucide-react'
+import { CalendarDays } from 'lucide-react'
 
 export default function Header() {
   return (
@@ -9,13 +9,13 @@ export default function Header() {
           <span>Shopee Viral</span>
         </Link>
 
-        <nav className="flex items-center gap-2">
+        <nav>
           <Link
-            href="/admin"
-            className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors text-sm font-semibold min-h-[44px] min-w-[44px] px-2 justify-center"
+            href="/calendario"
+            className="flex items-center gap-1.5 text-white/90 hover:text-white transition-colors text-sm font-semibold min-h-[44px] px-2 justify-center"
           >
-            <Settings className="h-5 w-5" />
-            <span className="hidden sm:inline">Admin</span>
+            <CalendarDays className="h-5 w-5" />
+            <span>Calendário</span>
           </Link>
         </nav>
       </div>
