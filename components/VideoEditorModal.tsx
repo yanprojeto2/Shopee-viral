@@ -422,9 +422,22 @@ export default function VideoEditorModal({
     setRecording(true)
     setProgress(0)
 
+    // Busca o vídeo como blob para evitar CORS taint no canvas
+    let videoBlobUrl: string
+    try {
+      const resp = await fetch(videoSrc)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const blob = await resp.blob()
+      videoBlobUrl = URL.createObjectURL(blob)
+    } catch (err: any) {
+      toast({ title: 'Erro ao carregar vídeo: ' + err.message, variant: 'destructive' })
+      setRecording(false)
+      return
+    }
+
     const video = document.createElement('video')
-    video.src = videoSrc
-    video.crossOrigin = 'anonymous'
+    video.src = videoBlobUrl
+    video.muted = true   // áudio capturado via AudioContext; muted evita bloqueio de autoplay
     video.playsInline = true
     video.preload = 'metadata'
 
@@ -436,6 +449,7 @@ export default function VideoEditorModal({
         setTimeout(() => reject(new Error('Timeout ao carregar vídeo')), 15000)
       })
     } catch (err: any) {
+      URL.revokeObjectURL(videoBlobUrl)
       toast({ title: err.message, variant: 'destructive' })
       setRecording(false)
       return
@@ -583,12 +597,17 @@ export default function VideoEditorModal({
         }
 
         audioCtx?.close()
+        URL.revokeObjectURL(videoBlobUrl)
         setRecording(false)
         setFinalizing(false)
         setProgress(0)
         cancelRef.current = null
 
         const mp4Blob = new Blob([target.buffer], { type: 'video/mp4' })
+        if (mp4Blob.size < 1000) {
+          toast({ title: 'Erro: vídeo gerado vazio. Tente novamente.', variant: 'destructive' })
+          return
+        }
         const mp4File = new File([mp4Blob], filename, { type: 'video/mp4' })
 
         if (navigator.canShare?.({ files: [mp4File] })) {
@@ -636,7 +655,9 @@ export default function VideoEditorModal({
         video.pause()
         musicSource?.stop()
         audioCtx?.close()
+        URL.revokeObjectURL(videoBlobUrl)
         setRecording(false)
+        setFinalizing(false)
         setProgress(0)
         cancelRef.current = null
       }
