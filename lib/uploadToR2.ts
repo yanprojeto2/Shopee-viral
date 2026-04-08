@@ -38,7 +38,7 @@ async function uploadMultipart(file: File, folder: string): Promise<string> {
   }
   const { uploadId, key } = await initRes.json()
 
-  // 2. Upload each part directly to R2 via presigned URL
+  // 2. Upload each part via server proxy (avoids CORS/AccessDenied on direct R2 PUT)
   const totalParts = Math.ceil(file.size / PART_SIZE)
   const parts: { partNumber: number; etag: string }[] = []
 
@@ -48,20 +48,18 @@ async function uploadMultipart(file: File, folder: string): Promise<string> {
     const chunk = file.slice(start, end)
     const partNumber = i + 1
 
-    // Get presigned URL for this part
-    const urlRes = await fetch('/api/admin/upload/part-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, uploadId, partNumber }),
-    })
-    if (!urlRes.ok) {
-      const body = await urlRes.json().catch(() => ({}))
-      throw new Error(body.error || `Falha ao obter URL da parte ${partNumber}`)
-    }
-    const { signedUrl } = await urlRes.json()
+    const formData = new FormData()
+    formData.append('chunk', chunk)
+    formData.append('key', key)
+    formData.append('uploadId', uploadId)
+    formData.append('partNumber', String(partNumber))
 
-    // PUT chunk directly to R2
-    const etag = await uploadPartXHR(signedUrl, chunk)
+    const partRes = await fetch('/api/admin/upload/part', { method: 'POST', body: formData })
+    if (!partRes.ok) {
+      const body = await partRes.json().catch(() => ({}))
+      throw new Error(body.error || `Falha ao enviar parte ${partNumber}`)
+    }
+    const { etag } = await partRes.json()
     parts.push({ partNumber, etag })
   }
 
@@ -79,24 +77,3 @@ async function uploadMultipart(file: File, folder: string): Promise<string> {
   return url
 }
 
-function uploadPartXHR(signedUrl: string, chunk: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', signedUrl)
-    xhr.timeout = 300000 // 5 min
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        // R2 returns ETag in response header
-        const etag = xhr.getResponseHeader('ETag') || xhr.getResponseHeader('etag') || ''
-        resolve(etag)
-      } else {
-        reject(new Error(`Parte falhou com status ${xhr.status}: ${xhr.responseText}`))
-      }
-    }
-    xhr.onerror = () => reject(new Error('Falha na conexão ao enviar parte'))
-    xhr.ontimeout = () => reject(new Error('Timeout ao enviar parte'))
-
-    xhr.send(chunk)
-  })
-}
