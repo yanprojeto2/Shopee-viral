@@ -242,6 +242,8 @@ export default function VideoEditorModal({
       ? firstVideo.url
       : `/api/media/stream/${firstVideo.id}`
     : null
+  // Endpoint que faz proxy real (sem redirect) — garante CORS para fetch() do encoder
+  const videoBlobSrc = firstVideo ? `/api/media/blob/${firstVideo.id}` : null
 
   // ------------------------------------------------------------------
   // Set canvas dimensions once when video metadata is known
@@ -389,7 +391,7 @@ export default function VideoEditorModal({
   // Download handler — creates fresh video + canvas, no DOM pollution
   // ------------------------------------------------------------------
   const handleDownload = async () => {
-    if (!videoSrc || !firstVideo) return
+    if (!videoSrc || !videoBlobSrc || !firstVideo) return
 
     // ── Detecção de browser e suporte a WebCodecs ────────────────────────────
     const isChrome = /Chrome\//.test(navigator.userAgent) && !/Edg\/|OPR\//.test(navigator.userAgent)
@@ -422,12 +424,13 @@ export default function VideoEditorModal({
     setRecording(true)
     setProgress(0)
 
-    // Busca o vídeo como blob para evitar CORS taint no canvas
+    // Busca o vídeo via proxy same-origin (sem redirect para R2) para evitar CORS taint
     let videoBlobUrl: string
     try {
-      const resp = await fetch(videoSrc)
+      const resp = await fetch(videoBlobSrc)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const blob = await resp.blob()
+      if (blob.size < 1000) throw new Error('Blob vazio recebido do servidor')
       videoBlobUrl = URL.createObjectURL(blob)
     } catch (err: any) {
       toast({ title: 'Erro ao carregar vídeo: ' + err.message, variant: 'destructive' })
