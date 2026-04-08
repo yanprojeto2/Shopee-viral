@@ -158,6 +158,7 @@ export default function VideoEditorModal({
   const [textPos, setTextPos] = useState({ x: 0.5, y: 0.82 })
   const [recording, setRecording] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [finalizing, setFinalizing] = useState(false)
   const [showBrowserWarning, setShowBrowserWarning] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
   const [activeMobilePanel, setActiveMobilePanel] = useState<'ia' | 'font' | 'bg' | 'color' | 'music' | null>(null)
@@ -571,6 +572,7 @@ export default function VideoEditorModal({
         scriptProcessor?.disconnect()
         video.pause()
         musicSource?.stop()
+        setFinalizing(true)
 
         try {
           await videoEncoder.flush()
@@ -582,6 +584,7 @@ export default function VideoEditorModal({
 
         audioCtx?.close()
         setRecording(false)
+        setFinalizing(false)
         setProgress(0)
         cancelRef.current = null
 
@@ -808,6 +811,16 @@ export default function VideoEditorModal({
           <Download className="h-4 w-4 mr-1" />
           Baixar com edição (HD)
         </Button>
+      ) : finalizing ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <Loader2 className="h-4 w-4 animate-spin text-shopee flex-shrink-0" />
+            <span>Finalizando MP4...</span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div className="bg-shopee h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -1010,13 +1023,20 @@ export default function VideoEditorModal({
                 </button>
               ))}
 
-              {/* Botão download / gravando */}
+              {/* Botão download / gravando / finalizando */}
               {!recording ? (
                 <button onClick={handleDownload} className="flex flex-col items-center gap-0.5">
                   <div className="rounded-full p-2.5 bg-shopee">
                     <Download className="h-5 w-5 text-white" />
                   </div>
                   <span className="text-white text-[10px] drop-shadow-md">Baixar</span>
+                </button>
+              ) : finalizing ? (
+                <button disabled className="flex flex-col items-center gap-0.5 opacity-90">
+                  <div className="rounded-full p-2.5 bg-shopee">
+                    <Loader2 className="h-5 w-5 text-white animate-spin" />
+                  </div>
+                  <span className="text-white text-[10px] drop-shadow-md">MP4...</span>
                 </button>
               ) : (
                 <button onClick={handleCancel} className="flex flex-col items-center gap-0.5">
