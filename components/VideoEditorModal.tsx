@@ -664,7 +664,29 @@ export default function VideoEditorModal({
         return
       }
 
-      // Desktop: converte WebM → MP4 via FFmpeg.wasm
+      // Safari grava nativamente em MP4 — baixa direto sem passar pelo FFmpeg
+      if (actualMime.startsWith('video/mp4')) {
+        const mp4File = new File([rawBlob], filename, { type: 'video/mp4' })
+        if (navigator.canShare?.({ files: [mp4File] })) {
+          try {
+            await navigator.share({ files: [mp4File], title: product.name })
+            toast({ title: '✅ Vídeo pronto para salvar!', variant: 'success' })
+            return
+          } catch { /* cancelado pelo usuário */ }
+        }
+        const url = URL.createObjectURL(rawBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        toast({ title: '✅ Download iniciado!', variant: 'success' })
+        return
+      }
+
+      // Desktop Chrome/Firefox: converte WebM → MP4 via FFmpeg.wasm
       try {
         setConverting(true)
         setConvertProgress(0)
