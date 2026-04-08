@@ -459,213 +459,191 @@ export default function VideoEditorModal({
     canvas.width  = REEL_W
     canvas.height = REEL_H
 
-    let audioCtx: AudioContext | null = null
-    let musicSource: AudioBufferSourceNode | null = null
-    let audioDestNode: MediaStreamAudioDestinationNode | null = null
-
-    try {
-      audioCtx = new AudioContext()
-      audioDestNode = audioCtx.createMediaStreamDestination()
-
-      try {
-        const videoAudioSrc = audioCtx.createMediaElementSource(video)
-        videoAudioSrc.connect(audioDestNode)
-      } catch { /* sem áudio no vídeo */ }
-
-      if (musicFile) {
-        const arrayBuf = await musicFile.arrayBuffer()
-        const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
-        musicSource = audioCtx.createBufferSource()
-        musicSource.buffer = audioBuf
-        musicSource.loop = true
-        const gainNode = audioCtx.createGain()
-        gainNode.gain.value = musicVolume
-        musicSource.connect(gainNode)
-        gainNode.connect(audioDestNode)
-        musicSource.start()
-      }
-
-    } catch { /* sem áudio */ }
-
-    const ctaSnapshot = selectedCta
-    const colorSnapshot = textColor
-    const fontSnapshot = selectedFont
+    const ctaSnapshot     = selectedCta
+    const colorSnapshot   = textColor
+    const fontSnapshot    = selectedFont
     const bgStyleSnapshot = bgStyle
     const bgColorSnapshot = bgColor
     const textPosSnapshot = textPosRef.current
     const fontScaleSnapshot = fontScaleRef.current
     const timestamp = Date.now()
-    const filename = `video-editado-${timestamp}.mp4`
+    const filename  = `video-editado-${timestamp}.mp4`
 
-    // ── WebCodecs path — H.264/MP4 via VideoEncoder + mp4-muxer ────────────
-    {
-      const { Muxer, ArrayBufferTarget } = await import('mp4-muxer')
-      const target = new ArrayBufferTarget()
+    // ── Áudio: apenas música de fundo (video está muted) ─────────────────────
+    // Não declaramos faixa de áudio no muxer se não há música — muxer com faixa
+    // declarada mas sem chunks produz output corrompido.
+    let audioCtxLocal: AudioContext | null = null
+    let audioEncoder: AudioEncoder | null  = null
+    let scriptProcessor: ScriptProcessorNode | null = null
+    let audioTimestampUs = 0
 
-      const muxer = new Muxer({
-        target,
-        video: { codec: 'avc', width: REEL_W, height: REEL_H },
-        ...(audioCtx ? {
-          audio: { codec: 'aac', sampleRate: audioCtx.sampleRate, numberOfChannels: 2 },
-        } : {}),
-        fastStart: 'in-memory',
-      } as any)
+    if (musicFile) {
+      try {
+        audioCtxLocal = new AudioContext({ sampleRate: 44100 })
+        const arrayBuf  = await musicFile.arrayBuffer()
+        const audioBuf  = await audioCtxLocal.decodeAudioData(arrayBuf)
+        const src       = audioCtxLocal.createBufferSource()
+        src.buffer      = audioBuf
+        src.loop        = true
+        const gain      = audioCtxLocal.createGain()
+        gain.gain.value = musicVolume
+        const dest      = audioCtxLocal.createMediaStreamDestination()
+        src.connect(gain)
+        gain.connect(dest)
+        src.start()
 
-      const videoEncoder = new VideoEncoder({
-        output: (chunk: EncodedVideoChunk, meta: EncodedVideoChunkMetadata | undefined) =>
-          muxer.addVideoChunk(chunk, meta),
-        error: (e) => console.error('VideoEncoder error:', e),
-      })
-      videoEncoder.configure({
-        codec: 'avc1.42001f',
-        width: REEL_W,
-        height: REEL_H,
-        bitrate: 2_500_000,
-        framerate: 30,
-      })
-
-      let audioEncoder: AudioEncoder | null = null
-      let scriptProcessor: ScriptProcessorNode | null = null
-      let audioTimestampUs = 0
-
-      if (audioCtx && audioDestNode) {
         audioEncoder = new AudioEncoder({
           output: (chunk: EncodedAudioChunk, meta: EncodedAudioChunkMetadata | undefined) =>
             muxer.addAudioChunk(chunk, meta),
           error: (e) => console.error('AudioEncoder error:', e),
         })
-        audioEncoder.configure({
-          codec: 'mp4a.40.2',
-          sampleRate: audioCtx.sampleRate,
-          numberOfChannels: 2,
-          bitrate: 128_000,
-        })
+        audioEncoder.configure({ codec: 'mp4a.40.2', sampleRate: 44100, numberOfChannels: 2, bitrate: 128_000 })
 
-        const streamSrc = audioCtx.createMediaStreamSource(audioDestNode.stream)
-        scriptProcessor = audioCtx.createScriptProcessor(1024, 2, 2)
+        const streamSrc = audioCtxLocal.createMediaStreamSource(dest.stream)
+        scriptProcessor = audioCtxLocal.createScriptProcessor(1024, 2, 2)
         streamSrc.connect(scriptProcessor)
-        scriptProcessor.connect(audioCtx.destination)
+        scriptProcessor.connect(audioCtxLocal.destination)
 
-        const localAudioCtx = audioCtx
-        const localAudioEncoder = audioEncoder
+        const localEnc = audioEncoder
         scriptProcessor.onaudioprocess = (e: AudioProcessingEvent) => {
-          if (localAudioEncoder.state !== 'configured') return
-          const left = e.inputBuffer.getChannelData(0)
+          if (localEnc.state !== 'configured') return
+          const left  = e.inputBuffer.getChannelData(0)
           const right = e.inputBuffer.getChannelData(1)
           const planar = new Float32Array(left.length * 2)
           planar.set(left, 0)
           planar.set(right, left.length)
-          const ad = new AudioData({
-            format: 'f32-planar',
-            sampleRate: localAudioCtx.sampleRate,
-            numberOfFrames: left.length,
-            numberOfChannels: 2,
-            timestamp: audioTimestampUs,
-            data: planar,
-          })
-          localAudioEncoder.encode(ad)
+          const ad = new AudioData({ format: 'f32-planar', sampleRate: 44100, numberOfFrames: left.length, numberOfChannels: 2, timestamp: audioTimestampUs, data: planar })
+          localEnc.encode(ad)
           ad.close()
-          audioTimestampUs += Math.round(left.length / localAudioCtx.sampleRate * 1_000_000)
+          audioTimestampUs += Math.round(left.length / 44100 * 1_000_000)
         }
+      } catch (e) {
+        console.warn('Audio setup failed, continuing without audio:', e)
+        audioEncoder = null
+        audioCtxLocal?.close()
+        audioCtxLocal = null
       }
-
-      const fps = 30
-      const frameDurationUs = Math.round(1_000_000 / fps)
-      let frameIndex = 0
-      let lastFrameMs = 0
-      let rafId = 0
-
-      const dur = isFinite(video.duration) ? video.duration : 0
-      const interval = setInterval(() => {
-        if (dur > 0) setProgress(Math.min(99, Math.round((video.currentTime / dur) * 100)))
-      }, 200)
-
-      const finishWebCodecs = async () => {
-        clearInterval(interval)
-        cancelAnimationFrame(rafId)
-        scriptProcessor?.disconnect()
-        video.pause()
-        musicSource?.stop()
-        setFinalizing(true)
-
-        try {
-          await videoEncoder.flush()
-          if (audioEncoder) await audioEncoder.flush()
-          muxer.finalize()
-        } catch (e) {
-          console.error('WebCodecs finalize error:', e)
-        }
-
-        audioCtx?.close()
-        URL.revokeObjectURL(videoBlobUrl)
-        setRecording(false)
-        setFinalizing(false)
-        setProgress(0)
-        cancelRef.current = null
-
-        const mp4Blob = new Blob([target.buffer], { type: 'video/mp4' })
-        if (mp4Blob.size < 1000) {
-          toast({ title: 'Erro: vídeo gerado vazio. Tente novamente.', variant: 'destructive' })
-          return
-        }
-        const mp4File = new File([mp4Blob], filename, { type: 'video/mp4' })
-
-        if (navigator.canShare?.({ files: [mp4File] })) {
-          try {
-            await navigator.share({ files: [mp4File], title: product.name })
-            toast({ title: '✅ Vídeo pronto para salvar!', variant: 'success' })
-            return
-          } catch { /* cancelado */ }
-        }
-        const url = URL.createObjectURL(mp4Blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        toast({ title: '✅ Download iniciado!', variant: 'success' })
-      }
-
-      const drawLoop = () => {
-        if (!video.paused && !video.ended) {
-          drawFrame(video, canvas, ctaSnapshot, colorSnapshot, fontSnapshot, bgStyleSnapshot, bgColorSnapshot, textPosSnapshot, fontScaleSnapshot)
-          const nowMs = performance.now()
-          if (nowMs - lastFrameMs >= 1000 / fps) {
-            const vf = new VideoFrame(canvas, {
-              timestamp: frameIndex * frameDurationUs,
-              duration: frameDurationUs,
-            })
-            videoEncoder.encode(vf, { keyFrame: frameIndex % 30 === 0 })
-            vf.close()
-            frameIndex++
-            lastFrameMs = nowMs
-          }
-          rafId = requestAnimationFrame(drawLoop)
-        }
-      }
-
-      video.onended = () => { finishWebCodecs() }
-
-      cancelRef.current = () => {
-        clearInterval(interval)
-        cancelAnimationFrame(rafId)
-        scriptProcessor?.disconnect()
-        video.pause()
-        musicSource?.stop()
-        audioCtx?.close()
-        URL.revokeObjectURL(videoBlobUrl)
-        setRecording(false)
-        setFinalizing(false)
-        setProgress(0)
-        cancelRef.current = null
-      }
-
-      video.currentTime = 0
-      await video.play()
-      rafId = requestAnimationFrame(drawLoop)
     }
+
+    // ── Muxer — faixa de áudio apenas se tiver encoder ───────────────────────
+    const { Muxer, ArrayBufferTarget } = await import('mp4-muxer')
+    const target = new ArrayBufferTarget()
+    const muxer  = new Muxer({
+      target,
+      video: { codec: 'avc', width: REEL_W, height: REEL_H },
+      ...(audioEncoder ? { audio: { codec: 'aac', sampleRate: 44100, numberOfChannels: 2 } } : {}),
+      fastStart: 'in-memory',
+    } as any)
+
+    const videoEncoder = new VideoEncoder({
+      output: (chunk: EncodedVideoChunk, meta: EncodedVideoChunkMetadata | undefined) =>
+        muxer.addVideoChunk(chunk, meta),
+      error: (e) => console.error('VideoEncoder error:', e),
+    })
+    videoEncoder.configure({ codec: 'avc1.42001f', width: REEL_W, height: REEL_H, bitrate: 2_500_000, framerate: 30 })
+
+    const dur = isFinite(video.duration) ? video.duration : 0
+    let frameCount = 0
+    let finished   = false
+
+    const cleanup = () => {
+      scriptProcessor?.disconnect()
+      video.pause()
+      audioCtxLocal?.close()
+      URL.revokeObjectURL(videoBlobUrl)
+    }
+
+    const finishWebCodecs = async () => {
+      if (finished) return
+      finished = true
+      cleanup()
+      setFinalizing(true)
+
+      try {
+        await videoEncoder.flush()
+        if (audioEncoder?.state === 'configured') await audioEncoder.flush()
+        muxer.finalize()
+      } catch (e) {
+        console.error('Finalize error:', e)
+      }
+
+      setRecording(false)
+      setFinalizing(false)
+      setProgress(0)
+      cancelRef.current = null
+
+      const mp4Blob = new Blob([target.buffer], { type: 'video/mp4' })
+      if (mp4Blob.size < 5000) {
+        toast({ title: `Erro: vídeo gerado inválido (${mp4Blob.size} bytes). Tente novamente.`, variant: 'destructive' })
+        return
+      }
+
+      const url = URL.createObjectURL(mp4Blob)
+      const a   = document.createElement('a')
+      a.href     = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast({ title: '✅ Download iniciado!', variant: 'success' })
+    }
+
+    cancelRef.current = () => {
+      if (finished) return
+      finished = true
+      cleanup()
+      setRecording(false)
+      setFinalizing(false)
+      setProgress(0)
+      cancelRef.current = null
+    }
+
+    // ── requestVideoFrameCallback: sincronizado com o decode do video ─────────
+    // Mais confiável que rAF — dispara exatamente uma vez por frame decodificado
+    const rvfc = (video as any).requestVideoFrameCallback?.bind(video)
+
+    if (rvfc) {
+      const onFrame = (_: number, meta: { mediaTime: number }) => {
+        if (finished) return
+        drawFrame(video, canvas, ctaSnapshot, colorSnapshot, fontSnapshot, bgStyleSnapshot, bgColorSnapshot, textPosSnapshot, fontScaleSnapshot)
+        const timestampUs = Math.round(meta.mediaTime * 1_000_000)
+        const vf = new VideoFrame(canvas, { timestamp: timestampUs })
+        videoEncoder.encode(vf, { keyFrame: frameCount % 30 === 0 })
+        vf.close()
+        frameCount++
+        if (dur > 0) setProgress(Math.min(99, Math.round((meta.mediaTime / dur) * 100)))
+        if (!video.ended) rvfc(onFrame)
+      }
+      video.onended = () => { setTimeout(() => finishWebCodecs(), 100) }
+      rvfc(onFrame)
+    } else {
+      // Fallback rAF (Chrome sempre tem rvfc, mas por segurança)
+      const frameDurationUs = Math.round(1_000_000 / 30)
+      let lastMs = 0
+      let rafId  = 0
+      const loop = () => {
+        if (finished) return
+        if (!video.paused && !video.ended) {
+          const nowMs = performance.now()
+          if (nowMs - lastMs >= 1000 / 30) {
+            drawFrame(video, canvas, ctaSnapshot, colorSnapshot, fontSnapshot, bgStyleSnapshot, bgColorSnapshot, textPosSnapshot, fontScaleSnapshot)
+            const vf = new VideoFrame(canvas, { timestamp: frameCount * frameDurationUs, duration: frameDurationUs })
+            videoEncoder.encode(vf, { keyFrame: frameCount % 30 === 0 })
+            vf.close()
+            frameCount++
+            lastMs = nowMs
+            if (dur > 0) setProgress(Math.min(99, Math.round((video.currentTime / dur) * 100)))
+          }
+          rafId = requestAnimationFrame(loop)
+        }
+      }
+      video.onended = () => { cancelAnimationFrame(rafId); finishWebCodecs() }
+      rafId = requestAnimationFrame(loop)
+    }
+
+    video.currentTime = 0
+    await video.play()
   }
 
   const handleCancel = () => {
