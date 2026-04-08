@@ -468,10 +468,9 @@ export default function VideoEditorModal({
     const timestamp = Date.now()
     const filename = `video-editado-${timestamp}.mp4`
 
-    // ── WebCodecs path (iOS/mobile) — grava direto em H.264/MP4 ─────────────
-    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    const hasWebCodecs = isMobileDevice
-      && typeof VideoEncoder !== 'undefined'
+    // ── WebCodecs path — grava direto em H.264/MP4 em qualquer browser que suporte
+    // (Chrome 94+, Safari 17+, iOS 17+, Edge 94+)
+    const hasWebCodecs = typeof VideoEncoder !== 'undefined'
       && typeof AudioEncoder !== 'undefined'
 
     if (hasWebCodecs) {
