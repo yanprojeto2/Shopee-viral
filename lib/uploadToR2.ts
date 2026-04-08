@@ -38,7 +38,8 @@ async function uploadMultipart(file: File, folder: string): Promise<string> {
   }
   const { uploadId, key } = await initRes.json()
 
-  // 2. Upload each part via server proxy (avoids CORS/AccessDenied on direct R2 PUT)
+  // 2. Upload each part via presigned URL (browser → R2 direto)
+  // Requer CORS configurado no bucket R2: AllowedMethods=[PUT], AllowedOrigins=[*]
   const totalParts = Math.ceil(file.size / PART_SIZE)
   const parts: { partNumber: number; etag: string }[] = []
 
@@ -48,18 +49,26 @@ async function uploadMultipart(file: File, folder: string): Promise<string> {
     const chunk = file.slice(start, end)
     const partNumber = i + 1
 
-    const formData = new FormData()
-    formData.append('chunk', chunk)
-    formData.append('key', key)
-    formData.append('uploadId', uploadId)
-    formData.append('partNumber', String(partNumber))
-
-    const partRes = await fetch('/api/admin/upload/part', { method: 'POST', body: formData })
-    if (!partRes.ok) {
-      const body = await partRes.json().catch(() => ({}))
-      throw new Error(body.error || `Falha ao enviar parte ${partNumber}`)
+    const urlRes = await fetch('/api/admin/upload/part-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, uploadId, partNumber }),
+    })
+    if (!urlRes.ok) {
+      const body = await urlRes.json().catch(() => ({}))
+      throw new Error(body.error || `Falha ao obter URL da parte ${partNumber}`)
     }
-    const { etag } = await partRes.json()
+    const { signedUrl } = await urlRes.json()
+
+    const putRes = await fetch(signedUrl, {
+      method: 'PUT',
+      body: chunk,
+      headers: { 'Content-Type': file.type },
+    })
+    if (!putRes.ok) {
+      throw new Error(`Parte ${partNumber} falhou: HTTP ${putRes.status}`)
+    }
+    const etag = putRes.headers.get('ETag') || putRes.headers.get('etag') || ''
     parts.push({ partNumber, etag })
   }
 
