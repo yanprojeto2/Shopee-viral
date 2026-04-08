@@ -158,9 +158,7 @@ export default function VideoEditorModal({
   const [textPos, setTextPos] = useState({ x: 0.5, y: 0.82 })
   const [recording, setRecording] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [converting, setConverting] = useState(false)
-  const [convertProgress, setConvertProgress] = useState(0)
-  const ffmpegRef = useRef<any>(null)
+  const [showBrowserWarning, setShowBrowserWarning] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
   const [activeMobilePanel, setActiveMobilePanel] = useState<'ia' | 'font' | 'bg' | 'color' | 'music' | null>(null)
   const [musicFile, setMusicFile] = useState<File | null>(null)
@@ -391,6 +389,35 @@ export default function VideoEditorModal({
   // ------------------------------------------------------------------
   const handleDownload = async () => {
     if (!videoSrc || !firstVideo) return
+
+    // ── Detecção de browser e suporte a WebCodecs ────────────────────────────
+    const isChrome = /Chrome\//.test(navigator.userAgent) && !/Edg\/|OPR\//.test(navigator.userAgent)
+    const hasWebCodecs = typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined'
+
+    if (!isChrome || !hasWebCodecs) {
+      setShowBrowserWarning(true)
+      return
+    }
+
+    // ── Validação via VideoEncoder.isConfigSupported() ───────────────────────
+    const videoConfig = {
+      codec: 'avc1.42001f',
+      width: REEL_W,
+      height: REEL_H,
+      bitrate: 2_500_000,
+      framerate: 30,
+    }
+    try {
+      const support = await VideoEncoder.isConfigSupported(videoConfig)
+      if (!support.supported) {
+        toast({ title: 'Seu Chrome não suporta a configuração de vídeo necessária', variant: 'destructive' })
+        return
+      }
+    } catch {
+      toast({ title: 'Erro ao verificar suporte de vídeo', variant: 'destructive' })
+      return
+    }
+
     setRecording(true)
     setProgress(0)
 
@@ -400,7 +427,6 @@ export default function VideoEditorModal({
     video.playsInline = true
     video.preload = 'metadata'
 
-    // Wait for metadata
     try {
       await new Promise<void>((resolve, reject) => {
         video.onloadedmetadata = () => resolve()
@@ -418,24 +444,19 @@ export default function VideoEditorModal({
     canvas.width  = REEL_W
     canvas.height = REEL_H
 
-    // Audio via Web Audio API — video audio + music track (opcional)
-    const canvasStream = canvas.captureStream(30)
     let audioCtx: AudioContext | null = null
     let musicSource: AudioBufferSourceNode | null = null
     let audioDestNode: MediaStreamAudioDestinationNode | null = null
-    let finalStream: MediaStream = canvasStream
 
     try {
       audioCtx = new AudioContext()
       audioDestNode = audioCtx.createMediaStreamDestination()
 
-      // Video original audio
       try {
         const videoAudioSrc = audioCtx.createMediaElementSource(video)
         videoAudioSrc.connect(audioDestNode)
       } catch { /* sem áudio no vídeo */ }
 
-      // Música de fundo (se selecionada)
       if (musicFile) {
         const arrayBuf = await musicFile.arrayBuffer()
         const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
@@ -449,15 +470,8 @@ export default function VideoEditorModal({
         musicSource.start()
       }
 
-      finalStream = new MediaStream([
-        ...canvasStream.getVideoTracks(),
-        ...audioDestNode.stream.getAudioTracks(),
-      ])
-    } catch {
-      finalStream = canvasStream
-    }
+    } catch { /* sem áudio */ }
 
-    // Snapshots compartilhados entre os dois paths
     const ctaSnapshot = selectedCta
     const colorSnapshot = textColor
     const fontSnapshot = selectedFont
@@ -468,12 +482,8 @@ export default function VideoEditorModal({
     const timestamp = Date.now()
     const filename = `video-editado-${timestamp}.mp4`
 
-    // ── WebCodecs path — grava direto em H.264/MP4 em qualquer browser que suporte
-    // (Chrome 94+, Safari 17+, iOS 17+, Edge 94+)
-    const hasWebCodecs = typeof VideoEncoder !== 'undefined'
-      && typeof AudioEncoder !== 'undefined'
-
-    if (hasWebCodecs) {
+    // ── WebCodecs path — H.264/MP4 via VideoEncoder + mp4-muxer ────────────
+    {
       const { Muxer, ArrayBufferTarget } = await import('mp4-muxer')
       const target = new ArrayBufferTarget()
 
@@ -631,167 +641,7 @@ export default function VideoEditorModal({
       video.currentTime = 0
       await video.play()
       rafId = requestAnimationFrame(drawLoop)
-      return
     }
-
-    // ── MediaRecorder path (desktop) ─────────────────────────────────────────
-    const preferredMime = ['video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm'].find(
-      (m) => MediaRecorder.isTypeSupported(m)
-    ) ?? ''
-    const recorder = new MediaRecorder(
-      finalStream,
-      { videoBitsPerSecond: 2_500_000, ...(preferredMime ? { mimeType: preferredMime } : {}) }
-    )
-    const chunks: Blob[] = []
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data)
-    }
-
-    recorder.onstop = async () => {
-      musicSource?.stop()
-      audioCtx?.close()
-      setRecording(false)
-      setProgress(0)
-      cancelRef.current = null
-
-      const actualMime = recorder.mimeType || 'video/webm'
-      const rawBlob = new Blob(chunks, { type: actualMime })
-
-      if (rawBlob.size < 1000) {
-        toast({ title: 'Gravação vazia — tente novamente', variant: 'destructive' })
-        return
-      }
-
-      // Detecta se o blob é realmente MP4 pelos magic bytes (bytes 4-7 = 'ftyp')
-      // Safari retorna mimeType vazio mas grava em MP4 nativamente
-      const isMp4Blob = await (async () => {
-        try {
-          const buf = new Uint8Array(await rawBlob.slice(0, 12).arrayBuffer())
-          return buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70
-        } catch { return false }
-      })()
-
-      if (actualMime.startsWith('video/mp4') || isMp4Blob) {
-        const mp4File = new File([rawBlob], filename, { type: 'video/mp4' })
-        if (navigator.canShare?.({ files: [mp4File] })) {
-          try {
-            await navigator.share({ files: [mp4File], title: product.name })
-            toast({ title: '✅ Vídeo pronto para salvar!', variant: 'success' })
-            return
-          } catch { /* cancelado pelo usuário */ }
-        }
-        const url = URL.createObjectURL(mp4File)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        toast({ title: '✅ Download iniciado!', variant: 'success' })
-        return
-      }
-
-      // Chrome/Firefox: converte WebM → MP4 via FFmpeg.wasm
-      try {
-        setConverting(true)
-        setConvertProgress(0)
-
-        const { FFmpeg } = await import('@ffmpeg/ffmpeg')
-        const { fetchFile, toBlobURL } = await import('@ffmpeg/util')
-
-        if (!ffmpegRef.current) {
-          const ff = new FFmpeg()
-          ff.on('progress', ({ progress: p }: { progress: number }) => {
-            setConvertProgress(Math.round(p * 100))
-          })
-          const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
-          await ff.load({
-            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-          })
-          ffmpegRef.current = ff
-        }
-
-        const ff = ffmpegRef.current
-        await ff.writeFile('input.webm', await fetchFile(rawBlob))
-        await ff.exec([
-          '-i', 'input.webm',
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',
-          '-crf', '28',
-          '-c:a', 'aac',
-          '-movflags', '+faststart',
-          'output.mp4'
-        ])
-        const data = await ff.readFile('output.mp4')
-        const mp4Blob = new Blob([data], { type: 'video/mp4' })
-        await ff.deleteFile('input.webm')
-        await ff.deleteFile('output.mp4')
-
-        const url = URL.createObjectURL(mp4Blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        toast({ title: '✅ Download iniciado!', variant: 'success' })
-      } catch (err: any) {
-        console.warn('FFmpeg falhou:', err?.message)
-        const webmFilename = `video-editado-${timestamp}.webm`
-        const fbUrl = URL.createObjectURL(rawBlob)
-        const fbA = document.createElement('a')
-        fbA.href = fbUrl
-        fbA.download = webmFilename
-        document.body.appendChild(fbA)
-        fbA.click()
-        document.body.removeChild(fbA)
-        URL.revokeObjectURL(fbUrl)
-        toast({ title: '⚠️ Baixado como WebM — conversão falhou', variant: 'default' })
-      } finally {
-        setConverting(false)
-        setConvertProgress(0)
-      }
-    }
-
-    let rafId = 0
-
-    const drawLoop = () => {
-      if (!video.paused && !video.ended) {
-        drawFrame(video, canvas, ctaSnapshot, colorSnapshot, fontSnapshot, bgStyleSnapshot, bgColorSnapshot, textPosSnapshot, fontScaleSnapshot)
-        rafId = requestAnimationFrame(drawLoop)
-      }
-    }
-
-    const dur = isFinite(video.duration) ? video.duration : 0
-    const interval = setInterval(() => {
-      if (dur > 0) setProgress(Math.min(99, Math.round((video.currentTime / dur) * 100)))
-    }, 200)
-
-    video.onended = () => {
-      clearInterval(interval)
-      cancelAnimationFrame(rafId)
-      recorder.stop()
-    }
-
-    cancelRef.current = () => {
-      clearInterval(interval)
-      cancelAnimationFrame(rafId)
-      if (recorder.state !== 'inactive') recorder.stop()
-      video.pause()
-      musicSource?.stop()
-      audioCtx?.close()
-      setRecording(false)
-      setProgress(0)
-    }
-
-    recorder.start(100)
-    video.currentTime = 0
-    await video.play()
-    rafId = requestAnimationFrame(drawLoop)
   }
 
   const handleCancel = () => {
@@ -953,22 +803,11 @@ export default function VideoEditorModal({
 
   const downloadSection = (
     <div className="mt-auto pt-3 border-t border-gray-100">
-      {!recording && !converting ? (
+      {!recording ? (
         <Button className="w-full min-h-[44px]" onClick={handleDownload}>
           <Download className="h-4 w-4 mr-1" />
           Baixar com edição (HD)
         </Button>
-      ) : converting ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <Loader2 className="h-4 w-4 animate-spin text-shopee flex-shrink-0" />
-            <span>Convertendo para MP4... {convertProgress}%</span>
-          </div>
-          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-            <div className="bg-shopee h-2 rounded-full transition-all duration-200" style={{ width: `${convertProgress}%` }} />
-          </div>
-          <p className="text-xs text-gray-400 text-center">Aguarde, isso pode levar alguns segundos</p>
-        </div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -1019,6 +858,38 @@ export default function VideoEditorModal({
 
         {/* Wrapper com relative para o overlay de confirmação */}
         <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
+
+        {/* Modal de browser não suportado */}
+        {showBrowserWarning && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-6">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4">
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="text-4xl">🌐</div>
+                <h2 className="text-base font-bold text-gray-800 leading-snug">
+                  Use o Google Chrome para editar vídeos
+                </h2>
+                <p className="text-sm text-gray-500 leading-snug">
+                  O editor de vídeo usa tecnologia avançada disponível apenas no <strong>Google Chrome</strong>. Outros navegadores (Safari, Firefox, Edge) não são suportados.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href).catch(() => {})
+                  toast({ title: 'Link copiado! Cole no Chrome.', variant: 'success' })
+                }}
+                className="w-full py-3 rounded-xl bg-shopee text-white font-semibold text-sm hover:bg-shopee-dark transition-colors"
+              >
+                Copiar link para abrir no Chrome
+              </button>
+              <button
+                onClick={() => setShowBrowserWarning(false)}
+                className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Confirmação de fechamento — overlay interno */}
         {confirmClose && (
@@ -1139,21 +1010,13 @@ export default function VideoEditorModal({
                 </button>
               ))}
 
-              {/* Botão download / gravando / convertendo */}
-              {!recording && !converting ? (
+              {/* Botão download / gravando */}
+              {!recording ? (
                 <button onClick={handleDownload} className="flex flex-col items-center gap-0.5">
                   <div className="rounded-full p-2.5 bg-shopee">
                     <Download className="h-5 w-5 text-white" />
                   </div>
                   <span className="text-white text-[10px] drop-shadow-md">Baixar</span>
-                </button>
-              ) : converting ? (
-                <button disabled className="flex flex-col items-center gap-0.5 opacity-90">
-                  <div className="rounded-full p-2.5 bg-yellow-500 flex flex-col items-center">
-                    <Loader2 className="h-5 w-5 text-white animate-spin" />
-                    <span className="text-white text-[8px] leading-none">{convertProgress}%</span>
-                  </div>
-                  <span className="text-white text-[10px] drop-shadow-md">MP4...</span>
                 </button>
               ) : (
                 <button onClick={handleCancel} className="flex flex-col items-center gap-0.5">
