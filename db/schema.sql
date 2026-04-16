@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS downloads (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   media_id      UUID NOT NULL REFERENCES media(id) ON DELETE CASCADE,
   user_agent    TEXT,
+  ip_address    TEXT,
   downloaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
