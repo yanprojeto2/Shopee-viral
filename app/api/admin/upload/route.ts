@@ -37,18 +37,11 @@ export async function POST(request: NextRequest) {
       }))
       return NextResponse.json({ url: `${process.env.R2_PUBLIC_URL}/${filename}` })
     } catch (err) {
-      console.error('R2 upload failed:', err instanceof Error ? err.message : err)
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('R2 upload failed:', message)
+      return NextResponse.json({ error: `R2: ${message}` }, { status: 500 })
     }
   }
 
-  // Fallback local (dev only)
-  try {
-    const parts = filename.split('/')
-    const uploadDir = join(process.cwd(), 'public', 'uploads', ...parts.slice(0, -1))
-    await mkdir(uploadDir, { recursive: true })
-    await writeFile(join(process.cwd(), 'public', 'uploads', filename), buffer)
-    return NextResponse.json({ url: `/uploads/${filename}`, warning: 'R2 indisponível, salvo localmente' })
-  } catch {
-    return NextResponse.json({ error: 'Upload falhou' }, { status: 500 })
-  }
+  return NextResponse.json({ error: 'R2 não configurado' }, { status: 500 })
 }
