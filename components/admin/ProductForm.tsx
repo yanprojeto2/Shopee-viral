@@ -40,6 +40,7 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
     is_top10: product?.is_top10 || false,
     rank: product?.rank?.toString() || '',
     is_active: product?.is_active ?? true,
+    is_new_video: product?.is_new_video || false,
   })
 
   const [mediaFile, setMediaFile] = useState<File | null>(null)
@@ -77,6 +78,7 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
       is_top10: form.is_top10,
       rank: form.is_top10 && form.rank ? parseInt(form.rank) : null,
       is_active: form.is_active,
+      is_new_video: form.is_new_video,
     }
 
     const url = isEditing ? `/api/admin/products/${product.id}` : '/api/admin/products'
@@ -101,7 +103,7 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
     if (mediaFile) {
       setUploadProgress(20)
 
-      const isVideo = form.is_top10
+      const isVideo = form.is_top10 || form.is_new_video
       try {
         const mediaUrl = await uploadToR2(mediaFile, isVideo ? 'product-videos' : 'product-photos')
         setUploadProgress(70)
@@ -142,6 +144,7 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
   }
 
   const isTop10 = form.is_top10
+  const isVideo = form.is_top10 || form.is_new_video
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
@@ -162,11 +165,24 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
             id="is_top10"
             checked={form.is_top10}
             onCheckedChange={(v) => {
-              setForm({ ...form, is_top10: v, rank: v ? form.rank : '' })
+              setForm({ ...form, is_top10: v, rank: v ? form.rank : '', is_new_video: v ? false : form.is_new_video })
               clearMedia()
             }}
           />
           <Label htmlFor="is_top10" className="cursor-pointer font-semibold">🔥 É Top 20?</Label>
+        </div>
+
+        {/* Novo vídeo */}
+        <div className="flex items-center gap-3 py-1 pb-3 border-b border-gray-100">
+          <Switch
+            id="is_new_video"
+            checked={form.is_new_video}
+            onCheckedChange={(v) => {
+              setForm({ ...form, is_new_video: v, is_top10: v ? false : form.is_top10, rank: v ? '' : form.rank })
+              clearMedia()
+            }}
+          />
+          <Label htmlFor="is_new_video" className="cursor-pointer font-semibold">✨ Novo vídeo?</Label>
         </div>
 
         {form.is_top10 && (
@@ -184,9 +200,11 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
           </div>
         )}
 
-        {/* Media upload — vídeo para Top 10, foto para os demais */}
+        {/* Media upload — vídeo para Top 10 e Novo vídeo, foto para os demais */}
         <div className="space-y-1.5">
-          <Label>{isTop10 ? 'Vídeo do produto (Top 10)' : 'Foto do produto'}</Label>
+          <Label>
+            {isTop10 ? 'Vídeo do produto (Top 20)' : isVideo ? 'Vídeo do produto (Novo vídeo)' : 'Foto do produto'}
+          </Label>
           <div
             className="border-2 border-dashed border-shopee-border rounded-xl overflow-hidden cursor-pointer hover:border-shopee transition-colors"
             onClick={() => fileInputRef.current?.click()}
@@ -195,14 +213,14 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
               e.preventDefault()
               const file = e.dataTransfer.files[0]
               if (!file) return
-              if (isTop10 && file.type.startsWith('video/')) handleMediaSelect(file)
-              if (!isTop10 && file.type.startsWith('image/')) handleMediaSelect(file)
+              if (isVideo && file.type.startsWith('video/')) handleMediaSelect(file)
+              if (!isVideo && file.type.startsWith('image/')) handleMediaSelect(file)
             }}
           >
             {mediaPreview ? (
               <div className="relative">
                 <div className="relative h-48 w-full bg-gray-100 flex items-center justify-center">
-                  {isTop10 ? (
+                  {isVideo ? (
                     <video
                       src={mediaPreview}
                       className="h-full w-full object-contain"
@@ -221,23 +239,23 @@ export default function ProductForm({ product, initialThumb }: ProductFormProps)
                   <X className="h-4 w-4" />
                 </button>
                 <p className="text-xs text-center text-muted-foreground py-2">
-                  Clique para trocar {isTop10 ? 'o vídeo' : 'a foto'}
+                  Clique para trocar {isVideo ? 'o vídeo' : 'a foto'}
                 </p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
                 <Upload className="h-8 w-8 text-shopee mb-2" />
                 <p className="font-semibold text-gray-700">
-                  Arraste ou clique para adicionar {isTop10 ? 'vídeo' : 'foto'}
+                  Arraste ou clique para adicionar {isVideo ? 'vídeo' : 'foto'}
                 </p>
-                <p className="text-xs mt-1">{isTop10 ? 'MP4, MOV, WEBM' : 'JPG, PNG, WEBP'}</p>
+                <p className="text-xs mt-1">{isVideo ? 'MP4, MOV, WEBM' : 'JPG, PNG, WEBP'}</p>
               </div>
             )}
           </div>
           <input
             ref={fileInputRef}
             type="file"
-            accept={isTop10 ? 'video/mp4,video/quicktime,video/webm' : 'image/jpeg,image/png,image/webp'}
+            accept={isVideo ? 'video/mp4,video/quicktime,video/webm' : 'image/jpeg,image/png,image/webp'}
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMediaSelect(f) }}
           />

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import DeleteProductButton from '@/components/admin/DeleteProductButton'
 import ToggleActiveButton from '@/components/admin/ToggleActiveButton'
+import ToggleNewVideoButton from '@/components/admin/ToggleNewVideoButton'
 
 interface Product {
   id: string
@@ -17,6 +18,7 @@ interface Product {
   price: string | null
   rank: number | null
   is_active: boolean
+  is_new_video: boolean
   photo_count: number
   video_count: number
   total_downloads: number
@@ -106,6 +108,7 @@ export default function ProductsTableClient({ products }: { products: Product[] 
               <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Categoria</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Mídias</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Downloads</th>
+              <th className="text-center px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Novo vídeo</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-600">Ações</th>
             </tr>
@@ -152,6 +155,9 @@ export default function ProductsTableClient({ products }: { products: Product[] 
                 </td>
                 <td className="px-4 py-3 text-center hidden lg:table-cell font-semibold text-gray-700">
                   {product.total_downloads.toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-center hidden md:table-cell">
+                  <ToggleNewVideoButton id={product.id} isNewVideo={product.is_new_video} />
                 </td>
                 <td className="px-4 py-3 text-center">
                   <ToggleActiveButton id={product.id} isActive={product.is_active} />

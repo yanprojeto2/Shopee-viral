@@ -26,12 +26,12 @@ export default async function ProductsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-800">Produtos</h1>
-          <p className="text-muted-foreground mt-1">{products.length} produto(s) cadastrado(s)</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-800">Produtos</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{products.length} produto(s) cadastrado(s)</p>
         </div>
-        <Button asChild>
+        <Button asChild size="sm" className="min-h-[44px]">
           <Link href="/admin/products/new"><Plus className="h-4 w-4" />Novo produto</Link>
         </Button>
       </div>

@@ -1,13 +1,12 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Download, Video, TrendingUp, Play, ExternalLink, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Video, TrendingUp, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import type { ProductWithMedia } from '@/types/database'
 import { getRankBadgeColor, formatDownloads } from '@/lib/utils'
-import VideoEditorModal from '@/components/VideoEditorModal'
 import VideoCard from '@/components/VideoCard'
 
 interface ProductCarouselProps {
@@ -18,27 +17,10 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isDownloading, setIsDownloading] = useState<string | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [editingProduct, setEditingProduct] = useState<ProductWithMedia | null>(null)
-  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({})
   const { toast } = useToast()
 
-  const handleMouseEnter = (productId: string) => {
-    setHoveredId(productId)
-    const video = videoRefs.current[productId]
-    if (video) {
-      video.currentTime = 0
-      video.play().catch(() => {})
-    }
-  }
-
-  const handleMouseLeave = (productId: string) => {
-    setHoveredId(null)
-    const video = videoRefs.current[productId]
-    if (video) {
-      video.pause()
-      video.currentTime = 0
-    }
-  }
+  const handleMouseEnter = (productId: string) => setHoveredId(productId)
+  const handleMouseLeave = () => setHoveredId(null)
 
   const scroll = (dir: 'left' | 'right') => {
     if (!scrollRef.current) return
@@ -98,7 +80,8 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
   const extraProducts = products.slice(10)
 
   const renderCard = (product: ProductWithMedia) => {
-    const firstVideo = product.media.find((m) => m.type === 'video')
+    const firstVideo = product.media.find((m) => m.type === 'video' && m.thumbnail_url)
+      ?? product.media.find((m) => m.type === 'video')
     const firstPhoto = product.media.find((m) => m.type === 'photo')
     const totalDownloads = product.media.reduce((s, m) => s + m.downloads, 0)
     const isHovered = hoveredId === product.id
@@ -106,28 +89,20 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
     return (
       <div
         key={product.id}
-        className="flex-none w-64 sm:w-64 md:w-72 snap-center bg-white rounded-xl border border-shopee-border shadow-sm overflow-hidden"
+        className="flex-none w-52 sm:w-56 snap-center bg-white rounded-xl border border-shopee-border shadow-sm overflow-hidden flex flex-col"
         onMouseEnter={() => handleMouseEnter(product.id)}
-        onMouseLeave={() => handleMouseLeave(product.id)}
+        onMouseLeave={handleMouseLeave}
       >
         {/* Video */}
-        <div className="relative h-52 sm:h-48 md:h-52 bg-gray-900">
+        <div className="relative aspect-[9/16] bg-gray-900">
           {firstVideo ? (
-            <>
-              <VideoCard
-                videoSrc={firstVideo.url.startsWith('/') ? firstVideo.url : `/api/media/stream/${firstVideo.id}`}
-                thumbnailUrl={firstVideo.thumbnail_url ? `/api/media/stream/${firstVideo.id}?thumb=1` : null}
-                className="w-full h-full object-cover"
-                videoRef={(el) => { videoRefs.current[product.id] = el }}
-              />
-              {!isHovered && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-                  <div className="bg-white/80 rounded-full p-3">
-                    <Play className="h-6 w-6 text-shopee fill-shopee" />
-                  </div>
-                </div>
-              )}
-            </>
+            <VideoCard
+              videoSrc={firstVideo.url.startsWith('/') ? firstVideo.url : `/api/media/stream/${firstVideo.id}`}
+              thumbnailUrl={firstVideo.thumbnail_url ? `/api/media/stream/${firstVideo.id}?thumb=1` : null}
+              className="w-full h-full object-cover"
+              videoRef={() => {}}
+              isPlaying={isHovered}
+            />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-2">
               <Video className="h-10 w-10 text-gray-400" />
@@ -151,7 +126,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4">
+        <div className="p-4 flex flex-col flex-1">
           <p className="text-xs text-shopee font-semibold uppercase tracking-wide mb-1">
             {product.category}
           </p>
@@ -159,7 +134,7 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
             {product.name}
           </h3>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 mt-auto">
             {firstVideo ? (
               <Button
                 size="sm"
@@ -194,15 +169,6 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
                 </Button>
               </a>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full text-xs min-h-[44px] border-gray-300 text-gray-700 hover:border-shopee hover:text-shopee"
-              onClick={() => setEditingProduct(product)}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              Editar vídeo
-            </Button>
           </div>
         </div>
       </div>
@@ -211,13 +177,6 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
 
   return (
     <>
-    {editingProduct && (
-      <VideoEditorModal
-        product={editingProduct}
-        open={!!editingProduct}
-        onClose={() => setEditingProduct(null)}
-      />
-    )}
     <section className="py-8">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-6">

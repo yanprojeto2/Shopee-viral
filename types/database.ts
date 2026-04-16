@@ -21,6 +21,7 @@ export interface Database {
           rank: number | null
           is_top10: boolean
           is_active: boolean
+          is_new_video: boolean
           created_at: string
         }
         Insert: {
@@ -34,6 +35,7 @@ export interface Database {
           rank?: number | null
           is_top10?: boolean
           is_active?: boolean
+          is_new_video?: boolean
           created_at?: string
         }
         Update: {
@@ -47,6 +49,7 @@ export interface Database {
           rank?: number | null
           is_top10?: boolean
           is_active?: boolean
+          is_new_video?: boolean
           created_at?: string
         }
       }

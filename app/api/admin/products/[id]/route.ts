@@ -15,7 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await request.json()
-    const { name, description, category, price, shopee_link, affiliate_link, is_top10, rank, is_active } = body
+    const { name, description, category, price, shopee_link, affiliate_link, is_top10, rank, is_active, is_new_video } = body
 
     const [product] = await sql`
       UPDATE products SET
@@ -27,7 +27,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         affiliate_link = ${affiliate_link},
         is_top10 = ${is_top10},
         rank = ${rank},
-        is_active = ${is_active}
+        is_active = ${is_active},
+        is_new_video = ${is_new_video ?? false}
       WHERE id = ${params.id}
       RETURNING *
     `

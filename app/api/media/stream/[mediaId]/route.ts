@@ -41,33 +41,48 @@ export async function GET(
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=86400',
-        'Access-Control-Allow-Origin': '*',
+        'Accept-Ranges': 'bytes',
       },
     })
   }
 
-  // Blob público — redireciona direto (sem proxy, sem auth)
-  if (!serveUrl.includes('.private.')) {
-    return NextResponse.redirect(serveUrl, { status: 302 })
+  // URL privada Vercel Blob — proxy com token
+  const isPrivate = serveUrl.includes('.private.')
+  const fetchHeaders: Record<string, string> = {}
+  const range = request.headers.get('range')
+  if (range) fetchHeaders['Range'] = range
+  if (isPrivate && process.env.BLOB_READ_WRITE_TOKEN) {
+    fetchHeaders['Authorization'] = `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`
   }
 
-  // URL privada legada — faz proxy sem auth (Vercel Blob suspenso; tenta mesmo assim)
-  const contentType = isThumb ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'image/jpeg'
-  const range = request.headers.get('range')
-  const fetchHeaders: Record<string, string> = {}
-  if (range) fetchHeaders['Range'] = range
-
+  // Para todas as URLs externas (R2 público ou Blob privado):
+  // fazemos proxy com suporte a Range — Safari iOS não consegue reproduzir vídeo via redirect
   const upstream = await fetch(serveUrl, { headers: fetchHeaders })
-  const headers: Record<string, string> = {
+
+  if (!upstream.ok && upstream.status !== 206) {
+    return NextResponse.json({ error: 'Upstream error' }, { status: upstream.status })
+  }
+
+  const contentType = isThumb
+    ? 'image/jpeg'
+    : type === 'video'
+    ? 'video/mp4'
+    : 'image/jpeg'
+
+  const responseHeaders: Record<string, string> = {
     'Content-Type': contentType,
-    'Cache-Control': 'public, max-age=3600',
     'Accept-Ranges': 'bytes',
+    'Cache-Control': 'public, max-age=3600',
     'Access-Control-Allow-Origin': '*',
   }
+
   const cl = upstream.headers.get('content-length')
   const cr = upstream.headers.get('content-range')
-  if (cl) headers['Content-Length'] = cl
-  if (cr) headers['Content-Range'] = cr
+  if (cl) responseHeaders['Content-Length'] = cl
+  if (cr) responseHeaders['Content-Range'] = cr
 
-  return new NextResponse(upstream.body, { status: upstream.status, headers })
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  })
 }

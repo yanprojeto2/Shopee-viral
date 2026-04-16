@@ -581,6 +581,18 @@ export default function VideoEditorModal({
         return
       }
 
+      const mp4File = new File([mp4Blob], filename, { type: 'video/mp4' })
+
+      // Mobile: usa Web Share API → abre sheet nativo para salvar na galeria
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      if (isMobile && navigator.canShare?.({ files: [mp4File] })) {
+        try {
+          await navigator.share({ files: [mp4File], title: product.name })
+          toast({ title: '✅ Vídeo pronto para salvar!', variant: 'success' })
+          return
+        } catch { /* cancelado pelo usuário — cai no a.download */ }
+      }
+
       const url = URL.createObjectURL(mp4Blob)
       const a   = document.createElement('a')
       a.href     = url

@@ -5,13 +5,14 @@ import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import ProductCarousel from '@/components/ProductCarousel'
 import ProductGrid from '@/components/ProductGrid'
+import NewVideosSection from '@/components/NewVideosSection'
 import type { ProductWithMedia } from '@/types/database'
 
 async function getProducts() {
   const rows = await sql`
     SELECT p.*,
       COALESCE(
-        json_agg(m ORDER BY m.created_at DESC) FILTER (WHERE m.id IS NOT NULL),
+        json_agg(m ORDER BY CASE WHEN m.thumbnail_url IS NOT NULL THEN 0 ELSE 1 END, m.created_at DESC) FILTER (WHERE m.id IS NOT NULL),
         '[]'
       ) AS media
     FROM products p
@@ -31,12 +32,13 @@ async function getProducts() {
 
   return {
     top10: enriched.filter((p) => p.is_top10).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)),
-    others: enriched.filter((p) => !p.is_top10),
+    newVideos: enriched.filter((p) => (p as any).is_new_video),
+    others: enriched.filter((p) => !p.is_top10 && !(p as any).is_new_video),
   }
 }
 
 export default async function HomePage() {
-  const { top10, others } = await getProducts()
+  const { top10, newVideos, others } = await getProducts()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -51,6 +53,11 @@ export default async function HomePage() {
       </div>
 
       <main className="flex-1">
+        {newVideos.length > 0 && (
+          <div className="bg-gray-50 border-b border-shopee-border">
+            <NewVideosSection products={newVideos} />
+          </div>
+        )}
         {top10.length > 0 && (
           <div className="bg-shopee-light">
             <ProductCarousel products={top10} />
@@ -59,7 +66,7 @@ export default async function HomePage() {
         <div className="bg-white">
           <ProductGrid products={others} />
         </div>
-        {top10.length === 0 && others.length === 0 && (
+        {top10.length === 0 && newVideos.length === 0 && others.length === 0 && (
           <div className="text-center py-16 sm:py-24 text-muted-foreground">
             <p className="text-3xl sm:text-5xl mb-4">—</p>
             <p className="text-base sm:text-lg font-semibold">Nenhum produto disponível ainda.</p>

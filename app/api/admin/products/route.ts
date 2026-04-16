@@ -23,11 +23,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, description, category, price, shopee_link, affiliate_link, is_top10, rank, is_active } = body
+    const { name, description, category, price, shopee_link, affiliate_link, is_top10, rank, is_active, is_new_video } = body
 
     const [product] = await sql`
-      INSERT INTO products (name, description, category, price, shopee_link, affiliate_link, is_top10, rank, is_active)
-      VALUES (${name}, ${description}, ${category}, ${price}, ${shopee_link}, ${affiliate_link}, ${is_top10}, ${rank}, ${is_active})
+      INSERT INTO products (name, description, category, price, shopee_link, affiliate_link, is_top10, rank, is_active, is_new_video)
+      VALUES (${name}, ${description}, ${category}, ${price}, ${shopee_link}, ${affiliate_link}, ${is_top10}, ${rank}, ${is_active}, ${is_new_video ?? false})
       RETURNING *
     `
     return NextResponse.json(product, { status: 201 })

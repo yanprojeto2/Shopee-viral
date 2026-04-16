@@ -2,14 +2,19 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { LayoutDashboard, Package, LogOut, ExternalLink } from 'lucide-react'
+import AdminMobileNav from '@/components/admin/AdminSidebar'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession()
   if (!session) redirect('/login')
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-60 bg-white border-r border-gray-200 flex flex-col flex-none">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      {/* Mobile nav (hamburger + drawer) */}
+      <AdminMobileNav />
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col flex-none min-h-screen">
         <div className="p-5 border-b border-gray-200">
           <Link href="/" className="flex items-center gap-2">
             <span className="text-2xl">🎬</span>
@@ -37,7 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <form action={async () => {
             'use server'
             const { cookies } = await import('next/headers')
-            const cookieStore = await cookies()
+            const cookieStore = cookies()
             cookieStore.delete('shopee-admin-token')
             redirect('/login')
           }}>
@@ -53,7 +58,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </aside>
 
       <main className="flex-1 overflow-auto">
-        <div className="p-8">{children}</div>
+        <div className="p-4 sm:p-6 md:p-8">{children}</div>
       </main>
     </div>
   )
