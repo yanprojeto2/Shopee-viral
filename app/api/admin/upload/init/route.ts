@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { S3Client, CreateMultipartUploadCommand } from '@aws-sdk/client-s3'
 

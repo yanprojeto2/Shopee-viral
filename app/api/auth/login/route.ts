@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { signToken, COOKIE_NAME } from '@/lib/auth'
 
