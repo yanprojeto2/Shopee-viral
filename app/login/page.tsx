@@ -23,21 +23,25 @@ function LoginForm() {
     setLoading(true)
     setError('')
 
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
 
-    if (!res.ok) {
-      const data = await res.json()
-      setError(data.error || 'Email ou senha incorretos.')
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || 'Email ou senha incorretos.')
+        setLoading(false)
+        return
+      }
+
+      window.location.href = redirectTo
+    } catch {
+      setError('Erro ao conectar. Tente novamente.')
       setLoading(false)
-      return
     }
-
-    router.push(redirectTo)
-    router.refresh()
   }
 
   return (
