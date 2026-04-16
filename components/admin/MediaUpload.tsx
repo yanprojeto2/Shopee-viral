@@ -23,6 +23,7 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [dragOver, setDragOver] = useState<'photo' | 'video' | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
@@ -31,11 +32,14 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
     setUploading(true)
     setProgress(20)
 
+    setUploadError(null)
     let url: string
     try {
       url = await uploadToR2(file, type === 'photo' ? 'product-photos' : 'product-videos')
     } catch (err) {
-      toast({ title: 'Erro no upload: ' + (err instanceof Error ? err.message : String(err)), variant: 'destructive' })
+      const msg = err instanceof Error ? err.message : String(err)
+      setUploadError(msg)
+      toast({ title: 'Erro no upload: ' + msg, variant: 'destructive' })
       setUploading(false)
       return
     }
@@ -101,6 +105,11 @@ export default function MediaUpload({ productId, productName, initialMedia }: Me
 
   return (
     <div className="space-y-8">
+      {uploadError && (
+        <div className="bg-red-50 border border-red-300 text-red-800 rounded-lg px-4 py-3 text-sm font-mono break-all">
+          <strong>Erro no upload:</strong> {uploadError}
+        </div>
+      )}
       {/* Photos */}
       <section>
         <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
